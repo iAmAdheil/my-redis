@@ -12,9 +12,33 @@ func main() {
 		fmt.Println("Failed to bind to port 6379")
 		os.Exit(1)
 	}
-	_, err = l.Accept()
+
+	conn, err := l.Accept()
 	if err != nil {
 		fmt.Println("Error accepting connection: ", err.Error())
 		os.Exit(1)
+	}
+
+	// in := make([]byte, 1024)
+
+	// n, err := conn.Read(in)
+	// if err != nil {
+	// 	fmt.Println("Error reading data from connection: ", err.Error())
+	// }
+
+	// fmt.Println("Length of incoming data:", n)
+	// // fmt.Println("Incoming data:", in)
+
+	// in = bytes.TrimSpace(in)
+
+	res := []byte("+PONG\r\n")
+	_, err = conn.Write(res)
+	if err != nil {
+		fmt.Println("Error writing data to connection: ", err.Error())
+	}
+
+	err = conn.Close()
+	if err != nil {
+		fmt.Println("Error while closing connnection", err.Error())
 	}
 }
