@@ -19,26 +19,22 @@ func main() {
 		os.Exit(1)
 	}
 
-	// in := make([]byte, 1024)
+	for {
+		in := make([]byte, 100)
+		_, err := conn.Read(in)
+		if err != nil {
+			fmt.Printf("Error reading from connection: %s\n", err.Error())
+		}
 
-	// n, err := conn.Read(in)
+		// _ := strings.Split(strings.TrimSpace(string(in)), "\n")[0]
+		out := []byte("+PONG\r\n")
+		if _, err := conn.Write(out); err != nil {
+			fmt.Printf("Error writing into connection: %s\n", err.Error())
+		}
+	}
+
+	// err = conn.Close()
 	// if err != nil {
-	// 	fmt.Println("Error reading data from connection: ", err.Error())
+	// 	fmt.Println("Error while closing connnection", err.Error())
 	// }
-
-	// fmt.Println("Length of incoming data:", n)
-	// // fmt.Println("Incoming data:", in)
-
-	// in = bytes.TrimSpace(in)
-
-	res := []byte("+PONG\r\n")
-	_, err = conn.Write(res)
-	if err != nil {
-		fmt.Println("Error writing data to connection: ", err.Error())
-	}
-
-	err = conn.Close()
-	if err != nil {
-		fmt.Println("Error while closing connnection", err.Error())
-	}
 }
