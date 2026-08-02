@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strings"
 )
 
 func main() {
@@ -27,14 +28,40 @@ func main() {
 func HandleConn(conn net.Conn) {
 	for {
 		in := make([]byte, 100)
-		_, err := conn.Read(in)
+		var out []byte
+
+		n, err := conn.Read(in)
 		if err != nil {
-			fmt.Printf("Error reading from connection: %s\n", err.Error())
+			panic(fmt.Sprintf("Error reading from connection: %s\n", err.Error()))
 		}
 
-		out := []byte("+PONG\r\n")
-		if _, err := conn.Write(out); err != nil {
-			fmt.Printf("Error writing into connection: %s\n", err.Error())
+		parts := RESPDecoder(n, in)
+		for _, v := range parts {
+			fmt.Printf("%q\n", v)
+		}
+
+		switch parts[0] {
+		case "*1":
+			out = []byte("+PONG\r\n")
+			if _, err := conn.Write(out); err != nil {
+				fmt.Printf("Error writing into connection: %s\n", err.Error())
+			}
+
+		case "*2":
+			if parts[1] == "$4" && strings.ToLower(parts[2]) == "echo" {
+				outs := fmt.Sprintf("%s\r\n%s\r\n", parts[3], parts[4])
+				out = []byte(outs)
+
+				if _, err := conn.Write(out); err != nil {
+					fmt.Printf("Error writing into connection: %s\n", err.Error())
+				}
+			}
 		}
 	}
+}
+
+func RESPDecoder(n int, in []byte) []string {
+	// n-1 to remove the trailing \n
+	com := string(in[:n])
+	return strings.Split(com, "\r\n")
 }
