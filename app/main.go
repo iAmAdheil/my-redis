@@ -6,6 +6,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 var vars = make(map[string]string)
@@ -86,6 +87,36 @@ func HandleConn(conn net.Conn) {
 					fmt.Printf("Error writing into connection: %s\n", err.Error())
 				}
 			}
+
+		case "*5":
+			if parts[1] == "$3" && strings.ToLower(parts[2]) == "set" {
+				key := parts[4]
+				val := parts[6]
+
+				// ex -> second
+				// px -> millisecond
+				t := parts[8]
+				d, err := strconv.ParseInt(parts[10], 10, 64)
+				if err != nil {
+					fmt.Printf("Error converting duration to int: %s\n", err.Error())
+				}
+
+				var m time.Duration
+				if strings.ToLower(t) == "px" {
+					m = time.Millisecond
+				} else {
+					m = time.Second
+				}
+
+				vars[key] = val
+				go Expire(time.Duration(d)*m, key)
+
+				out = RESPEncoder("OK", true)
+
+				if _, err := conn.Write(out); err != nil {
+					fmt.Printf("Error writing into connection: %s\n", err.Error())
+				}
+			}
 		}
 	}
 }
@@ -113,4 +144,9 @@ func RESPEncoder(res string, simple bool) []byte {
 		}
 	}
 	return []byte(s)
+}
+
+func Expire(t time.Duration, key string) {
+	time.Sleep(t)
+	delete(vars, key)
 }
