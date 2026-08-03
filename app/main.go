@@ -10,6 +10,23 @@ import (
 )
 
 var vars = make(map[string]string)
+var lists = make(map[string]*[]string)
+
+func UpdateList(listkey string, val string) int {
+	var count int
+
+	l, ok := lists[listkey]
+	if !ok {
+		nl := &[]string{val} // new list
+		lists[listkey] = nl
+		count = 1
+	} else {
+		*l = append(*l, val)
+		count = len(*l)
+	}
+
+	return count
+}
 
 func main() {
 	l, err := net.Listen("tcp", "0.0.0.0:6379")
@@ -47,14 +64,14 @@ func HandleConn(conn net.Conn) {
 
 		switch parts[0] {
 		case "*1":
-			out = RESPEncoder("PONG", true)
+			out = RESPEncoder("PONG", 0)
 			if _, err := conn.Write(out); err != nil {
 				fmt.Printf("Error writing into connection: %s\n", err.Error())
 			}
 
 		case "*2":
 			if parts[1] == "$4" && strings.ToLower(parts[2]) == "echo" {
-				out = RESPEncoder(parts[4], false)
+				out = RESPEncoder(parts[4], 1)
 
 				if _, err := conn.Write(out); err != nil {
 					fmt.Printf("Error writing into connection: %s\n", err.Error())
@@ -64,9 +81,9 @@ func HandleConn(conn net.Conn) {
 
 				val, ok := vars[key]
 				if !ok {
-					out = RESPEncoder("", false)
+					out = RESPEncoder("", 1)
 				} else {
-					out = RESPEncoder(val, false)
+					out = RESPEncoder(val, 1)
 				}
 
 				if _, err := conn.Write(out); err != nil {
@@ -81,7 +98,18 @@ func HandleConn(conn net.Conn) {
 
 				vars[key] = val
 
-				out = RESPEncoder("OK", true)
+				out = RESPEncoder("OK", 0)
+
+				if _, err := conn.Write(out); err != nil {
+					fmt.Printf("Error writing into connection: %s\n", err.Error())
+				}
+			} else if parts[1] == "$5" && strings.ToLower(parts[2]) == "rpush" {
+				listkey := parts[4]
+				val := parts[6]
+
+				count := UpdateList(listkey, val)
+
+				out = RESPEncoder(strconv.Itoa(count), 2)
 
 				if _, err := conn.Write(out); err != nil {
 					fmt.Printf("Error writing into connection: %s\n", err.Error())
@@ -111,7 +139,7 @@ func HandleConn(conn net.Conn) {
 				vars[key] = val
 				go Expire(time.Duration(d)*m, key)
 
-				out = RESPEncoder("OK", true)
+				out = RESPEncoder("OK", 0)
 
 				if _, err := conn.Write(out); err != nil {
 					fmt.Printf("Error writing into connection: %s\n", err.Error())
@@ -130,13 +158,16 @@ func RESPDecoder(n int, in []byte) []string {
 	return strings.Split(com, "\r\n")
 }
 
-// simple string -> +{string}\r\n
-// bulk string -> {string_len}\r\n{string}\r\n
-func RESPEncoder(res string, simple bool) []byte {
+// simple string -> +{string}\r\n -> 0
+// bulk string -> {string_len}\r\n{string}\r\n -> 1
+// RESP integer -> :{integer (sent as a string)}\r\n -> 2
+func RESPEncoder(res string, t int) []byte {
 	var s string
-	if simple {
+	if t == 0 {
 		s = fmt.Sprintf("+%s\r\n", res)
-	} else {
+	} else if t == 2 {
+		s = fmt.Sprintf(":%s\r\n", res)
+	} else if t == 1 {
 		if len(res) == 0 {
 			s = "$-1\r\n"
 		} else {
