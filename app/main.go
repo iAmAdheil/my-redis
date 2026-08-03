@@ -10,6 +10,9 @@ import (
 	"time"
 )
 
+// # Imp points (@iAmAdheil) -> pls take a look later
+// - arg validation should happen during decoding -> string to int conversions should not happen within my com handlers
+
 var vars = make(map[string]string)
 var lists = make(map[string]*[]string)
 
@@ -28,6 +31,28 @@ func UpdateList(listkey string, val []string) int {
 	}
 
 	return count
+}
+
+func GetListRange(key string, l, r int) []string {
+	res := []string{}
+
+	list, ok := lists[key]
+	if !ok {
+		return res
+	}
+
+	// max index for the list
+	rmax := len(*list) - 1
+
+	if l > r || l > rmax {
+		return res
+	}
+
+	for i := l; i <= min(r, rmax); i++ {
+		res = append(res, (*list)[i])
+	}
+
+	return res
 }
 
 func main() {
@@ -50,7 +75,7 @@ func main() {
 
 func HandleConn(conn net.Conn) {
 	for {
-		in := make([]byte, 100)
+		in := make([]byte, 1000)
 		var out []byte
 
 		n, err := conn.Read(in)
@@ -67,13 +92,14 @@ func HandleConn(conn net.Conn) {
 		switch strings.ToLower(parts[1]) {
 
 		case "ping":
-			out = RESPEncoder("PONG", 0)
+			out = RESPEncoder([]string{"PONG"}, 0)
 			if _, err := conn.Write(out); err != nil {
 				fmt.Printf("Error writing into connection: %s\n", err.Error())
 			}
 
 		case "echo":
-			out = RESPEncoder(parts[3], 1)
+			res := []string{parts[3]}
+			out = RESPEncoder(res, 1)
 
 			if _, err := conn.Write(out); err != nil {
 				fmt.Printf("Error writing into connection: %s\n", err.Error())
@@ -81,13 +107,15 @@ func HandleConn(conn net.Conn) {
 
 		case "get":
 			key := parts[3]
-
+			res := []string{}
 			val, ok := vars[key]
 			if !ok {
-				out = RESPEncoder("", 1)
+				res = append(res, "")
 			} else {
-				out = RESPEncoder(val, 1)
+				res = append(res, val)
 			}
+
+			out = RESPEncoder(res, 1)
 
 			if _, err := conn.Write(out); err != nil {
 				fmt.Printf("Error writing into connection: %s\n", err.Error())
@@ -108,7 +136,8 @@ func HandleConn(conn net.Conn) {
 				}
 			}
 
-			out = RESPEncoder("OK", 0)
+			res := []string{"OK"}
+			out = RESPEncoder(res, 0)
 
 			if _, err := conn.Write(out); err != nil {
 				fmt.Printf("Error writing into connection: %s\n", err.Error())
@@ -129,11 +158,31 @@ func HandleConn(conn net.Conn) {
 
 			listsize := UpdateList(listkey, vals)
 
-			out = RESPEncoder(strconv.Itoa(listsize), 2)
+			res := []string{strconv.Itoa(listsize)}
+			out = RESPEncoder(res, 2)
 
 			if _, err := conn.Write(out); err != nil {
 				fmt.Printf("Error writing into connection: %s\n", err.Error())
 			}
+
+		case "lrange":
+			key := parts[3]
+			l, err := strconv.ParseInt(parts[5], 10, 0)
+			if err != nil {
+				fmt.Printf("Error parsing the start index into an integer: %s\n", err.Error())
+			}
+			r, err := strconv.ParseInt(parts[7], 10, 0)
+			if err != nil {
+				fmt.Printf("Error parsing the stop index into an integer: %s\n", err.Error())
+			}
+
+			res := GetListRange(key, int(l), int(r))
+			out = RESPEncoder(res, 3)
+
+			if _, err := conn.Write(out); err != nil {
+				fmt.Printf("Error writing into connection: %s\n", err.Error())
+			}
+
 		}
 	}
 }
@@ -156,35 +205,30 @@ func RESPDecoder(n int, in []byte) (int, []string) {
 }
 
 // simple string -> +{string}\r\n -> 0
-// bulk string -> {string_len}\r\n{string}\r\n -> 1
+// bulk string -> ${string_len}\r\n{string}\r\n -> 1
 // RESP integer -> :{integer (sent as a string)}\r\n -> 2
-func RESPEncoder(res string, t int) []byte {
+// bulk string list -> *{res count} ... ${string_len}\r\n{string}\r\n -> 1=3
+func RESPEncoder(res []string, t int) []byte {
 	var s string
 
 	switch t {
 	case 0:
-		s = fmt.Sprintf("+%s\r\n", res)
+		s = fmt.Sprintf("+%s\r\n", res[0])
 	case 2:
-		s = fmt.Sprintf(":%s\r\n", res)
+		s = fmt.Sprintf(":%s\r\n", res[0])
+	case 3:
+		s = fmt.Sprintf("*%s\r\n", strconv.Itoa(len(res)))
+		for _, v := range res {
+			s += fmt.Sprintf("$%s\r\n%s\r\n", strconv.Itoa(len(v)), v)
+		}
 	default: // t == 1, bulk string as default
-		if len(res) == 0 {
+		if len(res) == 0 || len(res[0]) == 0 {
 			s = "$-1\r\n"
 		} else {
-			s = fmt.Sprintf("$%s\r\n%s\r\n", strconv.Itoa(len(res)), res)
+			v := res[0]
+			s = fmt.Sprintf("$%s\r\n%s\r\n", strconv.Itoa(len(v)), v)
 		}
 	}
-
-	// if t == 0 {
-	// 	s = fmt.Sprintf("+%s\r\n", res)
-	// } else if t == 2 {
-	// 	s = fmt.Sprintf(":%s\r\n", res)
-	// } else if t == 1 {
-	// 	if len(res) == 0 {
-	// 		s = "$-1\r\n"
-	// 	} else {
-	// 		s = fmt.Sprintf("$%s\r\n%s\r\n", strconv.Itoa(len(res)), res)
-	// 	}
-	// }
 
 	return []byte(s)
 }
