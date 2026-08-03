@@ -21,7 +21,7 @@ func UpdateList(listkey string, val []string) int {
 		nl := &[]string{} // new list
 		*nl = append(*nl, val...)
 		lists[listkey] = nl
-		count = 1
+		count = len(val)
 	} else {
 		*l = append(*l, val...)
 		count = len(*l)
@@ -73,14 +73,14 @@ func HandleConn(conn net.Conn) {
 			}
 
 		case "echo":
-			out = RESPEncoder(parts[4], 1)
+			out = RESPEncoder(parts[3], 1)
 
 			if _, err := conn.Write(out); err != nil {
 				fmt.Printf("Error writing into connection: %s\n", err.Error())
 			}
 
 		case "get":
-			key := parts[4]
+			key := parts[3]
 
 			val, ok := vars[key]
 			if !ok {
@@ -94,16 +94,18 @@ func HandleConn(conn net.Conn) {
 			}
 
 		case "set":
-			key := parts[4]
-			val := parts[6]
+			key := parts[3]
+			val := parts[5]
 
 			vars[key] = val
 
 			// parts has an element at index 8 and index 10
 			// if parts has expiry args sent -> only then setup expiry
 			if partcount == 5 {
-				err := SetupExpiry(parts[8], parts[10], key)
-				fmt.Printf("Error setting up expiry for key (%s): %s\n", key, err.Error())
+				err := SetupExpiry(parts[7], parts[9], key)
+				if err != nil {
+					fmt.Printf("Error setting up expiry for key (%s): %s\n", key, err.Error())
+				}
 			}
 
 			out = RESPEncoder("OK", 0)
@@ -113,12 +115,12 @@ func HandleConn(conn net.Conn) {
 			}
 
 		case "rpush":
-			listkey := parts[4]
+			listkey := parts[3]
 			var vals []string
 
 			// val count = part count - 2
 			valcount := partcount - 2
-			i := 6
+			i := 5
 			for valcount > 0 {
 				vals = append(vals, parts[i])
 				i += 2
