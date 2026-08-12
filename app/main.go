@@ -39,6 +39,15 @@ func UpdateList(listkey string, val []string, dir int) int {
 	return count
 }
 
+func GetListLen(key string) int {
+	l, ok := lists[key]
+	if !ok {
+		return 0
+	}
+
+	return len(*l)
+}
+
 func GetListRange(key string, l, r int) []string {
 	res := []string{}
 
@@ -199,11 +208,6 @@ func HandleConn(conn net.Conn) {
 
 		case "lpush":
 			key := parts[3]
-			list, ok := lists[key]
-			if !ok {
-				list = &[]string{}
-				lists[key] = list
-			}
 
 			vals := []string{}
 			valCount := partcount - 2
@@ -216,6 +220,17 @@ func HandleConn(conn net.Conn) {
 			}
 
 			listsize := UpdateList(key, vals, 1)
+
+			res := []string{strconv.Itoa(listsize)}
+			out = RESPEncoder(res, 2)
+
+			if _, err := conn.Write(out); err != nil {
+				fmt.Printf("Error writing into connection: %s\n", err.Error())
+			}
+
+		case "llen":
+			key := parts[3]
+			listsize := GetListLen(key)
 
 			res := []string{strconv.Itoa(listsize)}
 			out = RESPEncoder(res, 2)
