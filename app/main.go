@@ -40,9 +40,17 @@ func GetListRange(key string, l, r int) []string {
 	if !ok {
 		return res
 	}
+	listsize := len(*list)
+
+	if l < 0 {
+		l = max(0, listsize-(-1*l))
+	}
+	if r < 0 {
+		r = max(0, listsize-(-1*r))
+	}
 
 	// max index for the list
-	rmax := len(*list) - 1
+	rmax := listsize - 1
 
 	if l > r || l > rmax {
 		return res
