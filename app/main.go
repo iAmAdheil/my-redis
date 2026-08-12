@@ -16,20 +16,26 @@ import (
 var vars = make(map[string]string)
 var lists = make(map[string]*[]string)
 
-func UpdateList(listkey string, val []string) int {
+// dir -> 0 for append
+// dir -> 1 for prepend
+func UpdateList(listkey string, val []string, dir int) int {
 	var count int
 
 	l, ok := lists[listkey]
 	if !ok {
-		nl := &[]string{} // new list
-		*nl = append(*nl, val...)
-		lists[listkey] = nl
-		count = len(val)
-	} else {
-		*l = append(*l, val...)
-		count = len(*l)
+		l = &[]string{} // new list
+		lists[listkey] = l
 	}
 
+	switch dir {
+	case 0:
+		*l = append(*l, val...)
+
+	case 1:
+		*l = append(val, *l...)
+	}
+
+	count = len(*l)
 	return count
 }
 
@@ -164,7 +170,7 @@ func HandleConn(conn net.Conn) {
 				valcount--
 			}
 
-			listsize := UpdateList(listkey, vals)
+			listsize := UpdateList(listkey, vals, 0)
 
 			res := []string{strconv.Itoa(listsize)}
 			out = RESPEncoder(res, 2)
@@ -191,6 +197,32 @@ func HandleConn(conn net.Conn) {
 				fmt.Printf("Error writing into connection: %s\n", err.Error())
 			}
 
+		case "lpush":
+			key := parts[3]
+			list, ok := lists[key]
+			if !ok {
+				list = &[]string{}
+				lists[key] = list
+			}
+
+			vals := []string{}
+			valCount := partcount - 2
+			i := 5
+
+			for valCount > 0 {
+				vals = append([]string{parts[i]}, vals...)
+				i += 2
+				valCount--
+			}
+
+			listsize := UpdateList(key, vals, 1)
+
+			res := []string{strconv.Itoa(listsize)}
+			out = RESPEncoder(res, 2)
+
+			if _, err := conn.Write(out); err != nil {
+				fmt.Printf("Error writing into connection: %s\n", err.Error())
+			}
 		}
 	}
 }
@@ -256,7 +288,7 @@ func SetupExpiry(t string, ds string, key string) error {
 
 	d, err := strconv.ParseInt(ds, 10, 64)
 	if err != nil {
-		return errors.New(fmt.Sprintf("Error parsing the duration into an integer: %s\n", err.Error()))
+		return fmt.Errorf("Error parsing the duration into an integer: %s\n", err.Error())
 	}
 
 	go Expire(time.Duration(d)*m, key)
