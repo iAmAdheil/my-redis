@@ -18,7 +18,7 @@ var lists = make(map[string]*[]string)
 
 // dir -> 0 for append
 // dir -> 1 for prepend
-func UpdateList(listkey string, val []string, dir int) int {
+func AddToList(listkey string, val []string, dir int) int {
 	var count int
 
 	l, ok := lists[listkey]
@@ -28,15 +28,36 @@ func UpdateList(listkey string, val []string, dir int) int {
 	}
 
 	switch dir {
+	// rpush
 	case 0:
 		*l = append(*l, val...)
-
+	// lpush
 	case 1:
 		*l = append(val, *l...)
 	}
 
 	count = len(*l)
 	return count
+}
+
+func DeleteFromList(listkey string, dir int) (string, error) {
+	var s string
+
+	l, ok := lists[listkey]
+	if !ok {
+		return "", fmt.Errorf("Key not found")
+	}
+
+	switch dir {
+	// rpop
+	case 0:
+	// lpop
+	case 1:
+		s = (*l)[0]
+		*l = (*l)[1:]
+	}
+
+	return s, nil
 }
 
 func GetListLen(key string) int {
@@ -179,7 +200,7 @@ func HandleConn(conn net.Conn) {
 				valcount--
 			}
 
-			listsize := UpdateList(listkey, vals, 0)
+			listsize := AddToList(listkey, vals, 0)
 
 			res := []string{strconv.Itoa(listsize)}
 			out = RESPEncoder(res, 2)
@@ -219,7 +240,7 @@ func HandleConn(conn net.Conn) {
 				valCount--
 			}
 
-			listsize := UpdateList(key, vals, 1)
+			listsize := AddToList(key, vals, 1)
 
 			res := []string{strconv.Itoa(listsize)}
 			out = RESPEncoder(res, 2)
@@ -234,6 +255,21 @@ func HandleConn(conn net.Conn) {
 
 			res := []string{strconv.Itoa(listsize)}
 			out = RESPEncoder(res, 2)
+
+			if _, err := conn.Write(out); err != nil {
+				fmt.Printf("Error writing into connection: %s\n", err.Error())
+			}
+
+		case "lpop":
+			key := parts[3]
+			res := []string{}
+
+			s, err := DeleteFromList(key, 1)
+			if err == nil {
+				res = append(res, s)
+			}
+
+			out := RESPEncoder(res, 1)
 
 			if _, err := conn.Write(out); err != nil {
 				fmt.Printf("Error writing into connection: %s\n", err.Error())
