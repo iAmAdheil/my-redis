@@ -40,21 +40,27 @@ func AddToList(listkey string, val []string, dir int) int {
 	return count
 }
 
-func DeleteFromList(listkey string, dir int) (string, error) {
-	var s string
+func DeleteFromList(listkey string, count, dir int) ([]string, error) {
+	s := []string{}
 
 	l, ok := lists[listkey]
 	if !ok {
-		return "", fmt.Errorf("Key not found")
+		return []string{}, fmt.Errorf("Key not found")
 	}
+
+	listsize := len(*l)
+	// set max removable elements if count > list size
+	count = min(listsize, count)
 
 	switch dir {
 	// rpop
 	case 0:
 	// lpop
 	case 1:
-		s = (*l)[0]
-		*l = (*l)[1:]
+		for i := 0; i < count; i++ {
+			s = append(s, (*l)[i])
+		}
+		*l = (*l)[count:]
 	}
 
 	return s, nil
@@ -262,14 +268,29 @@ func HandleConn(conn net.Conn) {
 
 		case "lpop":
 			key := parts[3]
-			res := []string{}
+			count := 1
 
-			s, err := DeleteFromList(key, 1)
-			if err == nil {
-				res = append(res, s)
+			if len(parts) == 6 {
+				pc, err := strconv.ParseInt(parts[5], 10, 0) //parsed count
+				if err == nil {
+					count = int(pc)
+				}
 			}
 
-			out := RESPEncoder(res, 1)
+			res := []string{}
+			s, err := DeleteFromList(key, count, 1)
+			if err == nil {
+				res = append(res, s...)
+			}
+
+			var out []byte
+			if len(res) <= 1 {
+				// bulk string
+				out = RESPEncoder(res, 1)
+			} else {
+				// bulk string list
+				out = RESPEncoder(res, 3)
+			}
 
 			if _, err := conn.Write(out); err != nil {
 				fmt.Printf("Error writing into connection: %s\n", err.Error())
@@ -287,7 +308,7 @@ func RESPDecoder(n int, in []byte) (int, []string) {
 	parts := strings.Split(com, "\r\n")
 	count, err := strconv.ParseInt(parts[0][1:], 10, 0)
 	if err != nil {
-		fmt.Println("Error parsing RESP arg count into an integer: %s\n", err.Error())
+		fmt.Printf("Error parsing RESP arg count into an integer: %s\n", err.Error())
 		return 0, []string{}
 	}
 
