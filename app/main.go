@@ -38,8 +38,14 @@ func HandleConn(conn net.Conn) {
 		}
 
 		partcount, parts := RESPDecoder(n, in)
+		// log sent over request
 		// for _, v := range parts {
 		// 	fmt.Printf("%q\n", v)
+		// }
+
+		// com, err := GetCom(parts)
+		// if err != nil {
+
 		// }
 
 		switch strings.ToLower(parts[1]) {
