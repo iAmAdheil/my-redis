@@ -84,24 +84,48 @@ func RESPDecoder(in []byte) (string, []string, error) {
 	return strings.ToLower(base), args, nil
 }
 
-// simple string -> +{string}\r\n -> 0
-// bulk string -> ${string_len}\r\n{string}\r\n -> 1
-// RESP integer -> :{integer (sent as a string)}\r\n -> 2
-// bulk string list -> *{res count} ... ${string_len}\r\n{string}\r\n -> 1=3
-func RESPEncoder(res []string, t int) []byte {
+type EncodeType int
+
+const (
+	Simple EncodeType = iota
+	Bulk
+	Int
+	BulkList
+)
+
+var typeName = map[EncodeType]string{
+	Simple:   "simple",
+	Bulk:     "bulk",
+	Int:      "int",
+	BulkList: "bulk_list",
+}
+
+func (et EncodeType) String() string {
+	return typeName[et]
+}
+
+// simple string -> +{string}\r\n
+// bulk string -> ${string_len}\r\n{string}\r\n
+// RESP integer -> :{integer (sent as a string)}\r\n
+// bulk string list -> *{res count} ... ${string_len}\r\n{string}\r\n
+func RESPEncoder(res []string, t EncodeType) []byte {
 	var s string
 
 	switch t {
-	case 0:
+
+	case Simple:
 		s = fmt.Sprintf("+%s\r\n", res[0])
-	case 2:
+
+	case Int:
 		s = fmt.Sprintf(":%s\r\n", res[0])
-	case 3:
+
+	case BulkList:
 		s = fmt.Sprintf("*%s\r\n", strconv.Itoa(len(res)))
 		for _, v := range res {
 			s += fmt.Sprintf("$%s\r\n%s\r\n", strconv.Itoa(len(v)), v)
 		}
-	default: // t == 1, bulk string as default
+
+	default:
 		if len(res) == 0 || len(res[0]) == 0 {
 			s = "$-1\r\n"
 		} else {
