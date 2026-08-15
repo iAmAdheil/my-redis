@@ -103,20 +103,21 @@ func GetListRange(key string, l, r int) []string {
 	return res
 }
 
-func SetupExpiry(t string, ds string, key string) error {
+func SetupExpiry(et string, dur string, key string) error {
+	// et -> expiry type
 	// ex -> second
 	// px -> millisecond
 	var m time.Duration
 
-	if strings.ToLower(t) == "px" {
+	if strings.ToLower(et) == "px" {
 		m = time.Millisecond
-	} else if strings.ToLower(t) == "ex" {
+	} else if strings.ToLower(et) == "ex" {
 		m = time.Second
 	} else {
 		return errors.New("Unknown expiry type")
 	}
 
-	d, err := strconv.ParseInt(ds, 10, 64)
+	d, err := strconv.ParseInt(dur, 10, 64)
 	if err != nil {
 		return fmt.Errorf("Error parsing the duration into an integer: %s\n", err.Error())
 	}
