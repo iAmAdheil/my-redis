@@ -1,6 +1,8 @@
 package main
 
-import "errors"
+import (
+	"errors"
+)
 
 type Com struct {
 	Base string
@@ -12,7 +14,9 @@ type Com struct {
 
 func GetCom(base string, args []string) (*Com, error) {
 	com := &Com{
-		Base: base,
+		Base:   base,
+		Args:   make(map[string][]string),
+		Extras: make(map[string][]string),
 	}
 
 	var err error
@@ -22,18 +26,173 @@ func GetCom(base string, args []string) (*Com, error) {
 		com.ValidatePing(args)
 	case "echo":
 		err = com.ValidateEcho(args)
+	case "get":
+		err = com.ValidateGet(args)
+	case "set":
+		err = com.ValidateSet(args)
+	case "rpush":
+		err = com.ValidateRPush(args)
+	case "lrange":
+		err = com.ValidateLRange(args)
+	case "lpush":
+		err = com.ValidateLPush(args)
+	case "llen":
+		err = com.ValidateLLen(args)
+	case "lpop":
+		err = com.ValidateLPop(args)
 	}
 
 	return com, err
 }
 
+func (com *Com) HandleCom() []byte {
+	switch com.Base {
+	case "ping":
+		return com.ping()
+	case "echo":
+		return com.echo()
+	case "get":
+		return com.get()
+	case "set":
+		return com.set()
+	case "rpush":
+		return com.rpush()
+	case "lrange":
+		return com.lrange()
+	case "lpush":
+		return com.lpush()
+	case "llen":
+		return com.llen()
+	case "lpop":
+		return com.lpop()
+	default:
+		return nil
+	}
+}
+
 func (com *Com) ValidatePing(args []string) {} // eat five star do nothing
 
 func (com *Com) ValidateEcho(args []string) error {
-	if len(args) >= 2 {
-		com.Args["echothis"] = []string{args[1]}
+	if len(args) >= 1 {
+		com.Args["echothis"] = []string{args[0]}
 	} else {
 		return errors.New("Echo expects atleast one argument")
+	}
+
+	return nil
+}
+
+func (com *Com) ValidateGet(args []string) error {
+	if len(args) >= 1 {
+		com.Args["key"] = []string{args[0]}
+	} else {
+		return errors.New("Get expects key to be passed as an argument")
+	}
+
+	return nil
+}
+
+func (com *Com) ValidateSet(args []string) error {
+	// key
+	if len(args) >= 1 {
+		com.Args["key"] = []string{args[0]}
+	} else {
+		return errors.New("Set expects key to be passed as an argument")
+	}
+	// value
+	if len(args) >= 2 {
+		com.Args["value"] = []string{args[1]}
+	} else {
+		return errors.New("Set expects value to be passed as an argument")
+	}
+
+	// extras
+	// (@iAmAdheil) -> set up validation for non-compulsary args in the future
+	if len(args) >= 3 {
+		com.Extras["expiryType"] = []string{args[2]}
+	}
+	if len(args) >= 4 {
+		com.Extras["duration"] = []string{args[3]}
+	}
+
+	return nil
+}
+
+func (com *Com) ValidateRPush(args []string) error {
+	// key
+	if len(args) >= 1 {
+		com.Args["listkey"] = []string{args[0]}
+	} else {
+		return errors.New("RPush expects key to be passed as an argument")
+	}
+	// value
+	if len(args) >= 2 {
+		com.Args["values"] = args[1:]
+	} else {
+		return errors.New("RPush expects atleast 1 value to be passed as an argument")
+	}
+
+	return nil
+}
+
+func (com *Com) ValidateLRange(args []string) error {
+	if len(args) >= 1 {
+		com.Args["listkey"] = []string{args[0]}
+	} else {
+		return errors.New("LRange expects key to be passed as an argument")
+	}
+	if len(args) >= 2 {
+		com.Args["left"] = []string{args[1]}
+	} else {
+		return errors.New("LRange expects left index to be passed as an argument")
+	}
+	if len(args) >= 3 {
+		com.Args["right"] = []string{args[2]}
+	} else {
+		return errors.New("LRange expects right index to be passed as an argument")
+	}
+
+	return nil
+}
+
+func (com *Com) ValidateLPush(args []string) error {
+	// key
+	if len(args) >= 1 {
+		com.Args["listkey"] = []string{args[0]}
+	} else {
+		return errors.New("LPush expects key to be passed as an argument")
+	}
+	// value
+	if len(args) >= 2 {
+		com.Args["values"] = args[1:]
+	} else {
+		return errors.New("LPush expects atleast 1 value to be passed as an argument")
+	}
+
+	return nil
+}
+
+func (com *Com) ValidateLLen(args []string) error {
+	// key
+	if len(args) >= 1 {
+		com.Args["listkey"] = []string{args[0]}
+	} else {
+		return errors.New("Set expects key to be passed as an argument")
+	}
+
+	return nil
+}
+
+func (com *Com) ValidateLPop(args []string) error {
+	if len(args) >= 1 {
+		com.Args["listkey"] = []string{args[0]}
+	} else {
+		return errors.New("Set expects key to be passed as an argument")
+	}
+	if len(args) >= 2 {
+		com.Args["count"] = []string{args[1]}
+	} else {
+		com.Args["count"] = []string{"1"}
 	}
 
 	return nil
