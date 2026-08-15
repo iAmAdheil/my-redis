@@ -5,7 +5,6 @@ import (
 	"net"
 	"os"
 	"strconv"
-	"strings"
 )
 
 func main() {
@@ -37,18 +36,20 @@ func HandleConn(conn net.Conn) {
 			break
 		}
 
-		partcount, parts := RESPDecoder(n, in)
+		base, args, err := RESPDecoder(in[:n])
+		if err != nil {
+			// do something
+		}
+		com, err := GetCom(base, args)
+		if err != nil {
+			// do something
+		}
 		// log sent over request
 		// for _, v := range parts {
 		// 	fmt.Printf("%q\n", v)
 		// }
 
-		// com, err := GetCom(parts)
-		// if err != nil {
-
-		// }
-
-		switch strings.ToLower(parts[1]) {
+		switch base {
 
 		case "ping":
 			out = RESPEncoder([]string{"PONG"}, 0)

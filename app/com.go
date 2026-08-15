@@ -10,10 +10,7 @@ type Com struct {
 	Extras map[string][]string
 }
 
-func GetCom(parts []string) (*Com, error) {
-	base := parts[1]
-	rest := parts[2:]
-
+func GetCom(base string, args []string) (*Com, error) {
 	com := &Com{
 		Base: base,
 	}
@@ -22,9 +19,9 @@ func GetCom(parts []string) (*Com, error) {
 
 	switch base {
 	case "ping":
-		com.ValidatePing(rest)
+		com.ValidatePing(args)
 	case "echo":
-		err = com.ValidateEcho(rest)
+		err = com.ValidateEcho(args)
 	}
 
 	return com, err

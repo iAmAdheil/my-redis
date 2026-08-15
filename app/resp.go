@@ -1,26 +1,87 @@
 package main
 
 import (
+	"bufio"
+	"bytes"
 	"fmt"
+	"io"
 	"strconv"
 	"strings"
 )
 
-func RESPDecoder(n int, in []byte) (int, []string) {
-	com := string(in[:n])
-
+func RESPDecoder(in []byte) (string, []string, error) {
 	// print incoming bytes -> testing
 	// fmt.Printf("%q\n", in[:n])
 
-	parts := strings.Split(com, "\r\n")
-	count, err := strconv.ParseInt(parts[0][1:], 10, 0)
+	r := bytes.NewReader(in)
+	reader := bufio.NewReader(r)
+
+	line, err := reader.ReadString('\n')
 	if err != nil {
-		fmt.Printf("Error parsing RESP arg count into an integer: %s\n", err.Error())
-		return 0, []string{}
+		return "", []string{}, fmt.Errorf("error: Invalid argument length")
 	}
 
-	// prevent the last empty string from being passed as a part of the RESP command
-	return int(count), parts[1 : len(parts)-1]
+	line = string(bytes.TrimSpace([]byte(line)))
+	if len(line) == 0 || line[0] != '*' {
+		return "", []string{}, fmt.Errorf("expected array, got: %s", line)
+	}
+
+	// Parse number of elements in the array
+	numElements, err := strconv.Atoi(line[1:])
+	if err != nil {
+		return "", []string{}, fmt.Errorf("invalid array length: %s", err.Error())
+	}
+
+	var base string
+	var args []string
+
+	for i := 0; i < numElements; i++ {
+		// Read the bulk string header line (e.g., "$4")
+		header, err := reader.ReadString('\n')
+		if err != nil {
+			return "", []string{}, fmt.Errorf("error: %s\n", err.Error())
+		}
+		header = string(bytes.TrimSpace([]byte(header)))
+
+		if len(header) == 0 || header[0] != '$' {
+			return "", []string{}, fmt.Errorf("expected bulk string, got: %s", header)
+		}
+
+		// Parse the length
+		length, err := strconv.Atoi(header[1:])
+		if err != nil {
+			return "", []string{}, fmt.Errorf("invalid bulk string length: %s", err.Error())
+		}
+
+		// Handle Null bulk string ($ -1)
+		// (@iAmAdheil) -> pls verify behaviour and usecase
+		if length == -1 {
+			args = append(args, "") // or handle as nil
+			continue
+		}
+
+		// Read EXACTLY 'length' bytes for the data payload
+		buf := make([]byte, length)
+		_, err = io.ReadFull(reader, buf)
+		if err != nil {
+			return "", []string{}, fmt.Errorf("failed to read bulk string data: %s", err.Error())
+		}
+
+		// 4. Consume the trailing \r\n
+		trailer := make([]byte, 2)
+		_, err = io.ReadFull(reader, trailer)
+		if err != nil {
+			return "", []string{}, fmt.Errorf("failed to read trailing CRLF: %s", err.Error())
+		}
+
+		if i == 0 {
+			base = string(buf)
+		} else {
+			args = append(args, string(buf))
+		}
+	}
+
+	return strings.ToLower(base), args, nil
 }
 
 // simple string -> +{string}\r\n -> 0
