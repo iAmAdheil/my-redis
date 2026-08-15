@@ -64,8 +64,8 @@ func DeleteFromList(listkey string, count, dir int) ([]string, error) {
 	return s, nil
 }
 
-func GetListLen(key string) int {
-	l, ok := lists[key]
+func GetListLen(listkey string) int {
+	l, ok := lists[listkey]
 	if !ok {
 		return 0
 	}
@@ -73,10 +73,10 @@ func GetListLen(key string) int {
 	return len(*l)
 }
 
-func GetListRange(key string, l, r int) []string {
+func GetListRange(listkey string, l, r int) []string {
 	res := []string{}
 
-	list, ok := lists[key]
+	list, ok := lists[listkey]
 	if !ok {
 		return res
 	}
