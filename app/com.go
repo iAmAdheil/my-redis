@@ -40,6 +40,8 @@ func GetCom(base string, args []string) (*Com, error) {
 		err = com.ValidateLLen(args)
 	case "lpop":
 		err = com.ValidateLPop(args)
+	case "blpop":
+		err = com.ValidateBLPop(args)
 	}
 
 	return com, err
@@ -65,6 +67,8 @@ func (com *Com) HandleCom() []byte {
 		return com.llen()
 	case "lpop":
 		return com.lpop()
+	case "blpop":
+		return com.blpop()
 	default:
 		return nil
 	}
@@ -177,7 +181,7 @@ func (com *Com) ValidateLLen(args []string) error {
 	if len(args) >= 1 {
 		com.Args["listkey"] = []string{args[0]}
 	} else {
-		return errors.New("Set expects key to be passed as an argument")
+		return errors.New("LLen expects key to be passed as an argument")
 	}
 
 	return nil
@@ -187,12 +191,27 @@ func (com *Com) ValidateLPop(args []string) error {
 	if len(args) >= 1 {
 		com.Args["listkey"] = []string{args[0]}
 	} else {
-		return errors.New("Set expects key to be passed as an argument")
+		return errors.New("LPop expects key to be passed as an argument")
 	}
 	if len(args) >= 2 {
 		com.Args["count"] = []string{args[1]}
 	} else {
 		com.Args["count"] = []string{"1"}
+	}
+
+	return nil
+}
+
+func (com *Com) ValidateBLPop(args []string) error {
+	if len(args) >= 1 {
+		com.Args["listkey"] = []string{args[0]}
+	} else {
+		return errors.New("BLPop expects key to be passed as an argument")
+	}
+	if len(args) >= 2 {
+		com.Args["timeout"] = []string{args[1]}
+	} else {
+		return errors.New("BLPop expects timeout to be passed as an argument")
 	}
 
 	return nil

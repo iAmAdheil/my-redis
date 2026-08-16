@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -16,6 +17,7 @@ var vars = make(map[string]string)
 var vmu sync.Mutex = sync.Mutex{}
 
 var lists = make(map[string]*[]string)
+var listch = make(map[string][]chan string)
 var lmu sync.RWMutex = sync.RWMutex{}
 
 // dir -> 0 for append
@@ -38,11 +40,33 @@ func AddToList(listkey string, val []string, dir int) int {
 		*l = append(*l, val...)
 	// lpush
 	case 1:
+		slices.Reverse(val)
 		*l = append(val, *l...)
 	}
-
 	count = len(*l)
+
+	handleListeners(listkey)
+
 	return count
+}
+
+func handleListeners(listkey string) {
+	lch, ok := listch[listkey]
+	if ok && len(lch) > 0 {
+		l, ok := lists[listkey]
+		if !ok {
+			return
+		}
+
+		for _, ch := range lch {
+			if len(*l) >= 1 {
+				ch <- (*l)[0]
+				*l = (*l)[1:]
+			} else {
+				break
+			}
+		}
+	}
 }
 
 func DeleteFromList(listkey string, count, dir int) ([]string, error) {

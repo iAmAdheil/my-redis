@@ -121,3 +121,48 @@ func (com *Com) lpop() []byte {
 	// bulk string
 	return RESPEncoder(out, Bulk)
 }
+
+func (com *Com) blpop() []byte {
+	listkey := com.Args["listkey"][0]
+	// timeout := com.Args["timeout"][0]
+
+	var ch chan string
+
+	out := []string{}
+	out = append(out, listkey)
+
+	lmu.Lock()
+	l, ok := lists[listkey]
+
+	if !ok || len(*l) == 0 {
+		ch = make(chan string, 1)
+
+		lch, ok := listch[listkey]
+		if !ok {
+			lch = []chan string{ch}
+		} else {
+			lch = append(lch, ch)
+		}
+
+		listch[listkey] = lch
+
+	} else if len(*l) >= 1 {
+		s, err := DeleteFromList(listkey, 1, 1)
+		if err == nil {
+			out = append(out, s...)
+		}
+
+		// only reach this if list has elements available to pop
+		// imp. to release resource
+		lmu.Unlock()
+
+		return RESPEncoder(out, BulkList)
+	}
+
+	lmu.Unlock()
+
+	pop := <-ch
+	out = append(out, pop)
+
+	return RESPEncoder(out, BulkList)
+}
