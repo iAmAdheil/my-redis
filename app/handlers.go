@@ -19,7 +19,11 @@ func (com *Com) get() []byte {
 	key := com.Args["key"][0]
 
 	res := []string{}
+
+	vmu.Lock()
 	val, ok := vars[key]
+	defer vmu.Unlock()
+
 	if !ok {
 		res = append(res, "")
 	} else {
@@ -33,7 +37,9 @@ func (com *Com) set() []byte {
 	key := com.Args["key"][0]
 	val := com.Args["value"][0]
 
+	vmu.Lock()
 	vars[key] = val
+	vmu.Unlock()
 
 	// parts has an element at index 8 and index 10
 	// if parts has expiry args sent -> only then setup expiry

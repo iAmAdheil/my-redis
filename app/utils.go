@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -12,14 +13,20 @@ import (
 // - arg validation should happen during decoding -> string to int conversions should not happen within my com handlers
 
 var vars = make(map[string]string)
+var vmu sync.Mutex = sync.Mutex{}
+
 var lists = make(map[string]*[]string)
+var lmu sync.RWMutex = sync.RWMutex{}
 
 // dir -> 0 for append
 // dir -> 1 for prepend
 func AddToList(listkey string, val []string, dir int) int {
 	var count int
 
+	lmu.Lock()
 	l, ok := lists[listkey]
+	defer lmu.Unlock()
+
 	if !ok {
 		l = &[]string{} // new list
 		lists[listkey] = l
@@ -41,7 +48,10 @@ func AddToList(listkey string, val []string, dir int) int {
 func DeleteFromList(listkey string, count, dir int) ([]string, error) {
 	s := []string{}
 
+	lmu.Lock()
 	l, ok := lists[listkey]
+	defer lmu.Unlock()
+
 	if !ok {
 		return []string{}, fmt.Errorf("Key not found")
 	}
@@ -65,7 +75,10 @@ func DeleteFromList(listkey string, count, dir int) ([]string, error) {
 }
 
 func GetListLen(listkey string) int {
+	lmu.RLock()
 	l, ok := lists[listkey]
+	defer lmu.RUnlock()
+
 	if !ok {
 		return 0
 	}
@@ -76,7 +89,10 @@ func GetListLen(listkey string) int {
 func GetListRange(listkey string, l, r int) []string {
 	res := []string{}
 
+	lmu.RLock()
 	list, ok := lists[listkey]
+	defer lmu.RUnlock()
+
 	if !ok {
 		return res
 	}
@@ -128,5 +144,8 @@ func SetupExpiry(et string, dur string, key string) error {
 
 func Expire(t time.Duration, key string) {
 	time.Sleep(t)
+
+	vmu.Lock()
 	delete(vars, key)
+	vmu.Unlock()
 }
