@@ -58,15 +58,38 @@ func handleListeners(listkey string) {
 			return
 		}
 
+		procs := 0
 		for _, ch := range lch {
 			if len(*l) >= 1 {
 				ch <- (*l)[0]
+				// count no. of chans filled
+				// each time a listener is satisfied -> pop
+				procs++
 				*l = (*l)[1:]
 			} else {
 				break
 			}
 		}
+
+		listch[listkey] = lch[procs:]
 	}
+}
+
+func popChan(lch []chan string, target chan string) ([]chan string, bool) {
+	var (
+		clone    []chan string
+		isExists = false
+	)
+
+	for _, ch := range lch {
+		if ch != target {
+			clone = append(clone, ch)
+		} else {
+			isExists = true
+		}
+	}
+
+	return clone, isExists
 }
 
 func DeleteFromList(listkey string, count, dir int) ([]string, error) {

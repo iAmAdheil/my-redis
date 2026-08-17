@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"strconv"
+	"time"
 )
 
 func (com *Com) ping() []byte {
@@ -124,7 +125,9 @@ func (com *Com) lpop() []byte {
 
 func (com *Com) blpop() []byte {
 	listkey := com.Args["listkey"][0]
-	// timeout := com.Args["timeout"][0]
+	ts := com.Args["timeout"][0]
+
+	timeout, _ := strconv.ParseFloat(ts, 32)
 
 	var ch chan string
 
@@ -161,8 +164,49 @@ func (com *Com) blpop() []byte {
 
 	lmu.Unlock()
 
-	pop := <-ch
-	out = append(out, pop)
+	expch := make(chan int)
 
-	return RESPEncoder(out, BulkList)
+	if timeout > 0 {
+		// activate chan after interval
+		go func() {
+			duration := time.Duration(timeout * float64(time.Second))
+			time.Sleep(duration)
+			expch <- 1
+		}()
+	}
+
+	var res []byte
+
+	select {
+	case pop := <-ch:
+		fmt.Println("works")
+		out = append(out, pop)
+
+	case <-expch:
+		lmu.Lock()
+		// check if chan is still in array
+		// true -> pop chan and return -1
+		lch, ok := listch[listkey]
+		if ok {
+			ulch, isExists := popChan(lch, ch)
+			if isExists {
+				listch[listkey] = ulch
+				res = RESPEncoder([]string{}, BulkList)
+				goto ignoreCh
+			}
+		}
+		// false -> chan was filled just before timeout -> process and return happy path
+		pop := <-ch
+		out = append(out, pop)
+
+		lmu.Unlock()
+	}
+
+	res = RESPEncoder(out, BulkList)
+
+ignoreCh:
+	close(expch)
+	close(ch)
+
+	return res
 }

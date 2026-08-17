@@ -120,9 +120,13 @@ func RESPEncoder(res []string, t EncodeType) []byte {
 		s = fmt.Sprintf(":%s\r\n", res[0])
 
 	case BulkList:
-		s = fmt.Sprintf("*%s\r\n", strconv.Itoa(len(res)))
-		for _, v := range res {
-			s += fmt.Sprintf("$%s\r\n%s\r\n", strconv.Itoa(len(v)), v)
+		if len(res) == 0 {
+			s = "*-1\r\n"
+		} else {
+			s = fmt.Sprintf("*%s\r\n", strconv.Itoa(len(res)))
+			for _, v := range res {
+				s += fmt.Sprintf("$%s\r\n%s\r\n", strconv.Itoa(len(v)), v)
+			}
 		}
 
 	default:
