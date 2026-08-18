@@ -19,19 +19,15 @@ func (com *Com) echo() []byte {
 func (com *Com) get() []byte {
 	key := com.Args["key"][0]
 
-	res := []string{}
-
 	vmu.Lock()
 	val, ok := vars[key]
 	defer vmu.Unlock()
 
 	if !ok {
-		res = append(res, "")
+		return RESPEncoder(nil, NullBulk)
 	} else {
-		res = append(res, val)
+		return RESPEncoder([]string{val}, Bulk)
 	}
-
-	return RESPEncoder(res, Bulk)
 }
 
 func (com *Com) set() []byte {
@@ -164,49 +160,43 @@ func (com *Com) blpop() []byte {
 
 	lmu.Unlock()
 
-	expch := make(chan int)
-
+	var expch <-chan time.Time
 	if timeout > 0 {
 		// activate chan after interval
-		go func() {
-			duration := time.Duration(timeout * float64(time.Second))
-			time.Sleep(duration)
-			expch <- 1
-		}()
+		duration := time.Duration(timeout * float64(time.Second))
+		expch = time.After(duration)
 	}
 
 	var res []byte
 
 	select {
 	case pop := <-ch:
-		fmt.Println("works")
 		out = append(out, pop)
+		res = RESPEncoder(out, BulkList)
 
+	// lock to update channel slice
+	// after acquiring lock if channel found and popped -> return -1
+	// else value has been passed into channel -> process and return value
 	case <-expch:
 		lmu.Lock()
 		// check if chan is still in array
 		// true -> pop chan and return -1
-		lch, ok := listch[listkey]
-		if ok {
-			ulch, isExists := popChan(lch, ch)
-			if isExists {
-				listch[listkey] = ulch
-				res = RESPEncoder([]string{}, BulkList)
-				goto ignoreCh
-			}
+		lch := listch[listkey]
+		// handles nil channel list -> no need to check for ok
+		ulch, isExists := popChan(lch, ch)
+		// channel popped from the list, no value pushed
+		if isExists {
+			listch[listkey] = ulch
+			res = RESPEncoder(nil, NullBulkList)
+		} else {
+			// false -> chan was filled just before timeout -> process and return happy path
+			pop := <-ch
+			out = append(out, pop)
+			res = RESPEncoder(out, BulkList)
 		}
-		// false -> chan was filled just before timeout -> process and return happy path
-		pop := <-ch
-		out = append(out, pop)
 
 		lmu.Unlock()
 	}
-
-	res = RESPEncoder(out, BulkList)
-
-ignoreCh:
-	close(expch)
-	close(ch)
 
 	return res
 }

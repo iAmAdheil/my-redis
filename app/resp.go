@@ -88,16 +88,20 @@ type EncodeType int
 
 const (
 	Simple EncodeType = iota
+	NullBulk
 	Bulk
 	Int
 	BulkList
+	NullBulkList
 )
 
 var typeName = map[EncodeType]string{
-	Simple:   "simple",
-	Bulk:     "bulk",
-	Int:      "int",
-	BulkList: "bulk_list",
+	Simple:       "simple",
+	Bulk:         "bulk",
+	Int:          "int",
+	BulkList:     "bulk_list",
+	NullBulk:     "null_bulk",
+	NullBulkList: "null_bulk_list",
 }
 
 func (et EncodeType) String() string {
@@ -119,23 +123,19 @@ func RESPEncoder(res []string, t EncodeType) []byte {
 	case Int:
 		s = fmt.Sprintf(":%s\r\n", res[0])
 
+	case NullBulkList:
+		s = "*-1\r\n"
 	case BulkList:
-		if len(res) == 0 {
-			s = "*-1\r\n"
-		} else {
-			s = fmt.Sprintf("*%s\r\n", strconv.Itoa(len(res)))
-			for _, v := range res {
-				s += fmt.Sprintf("$%s\r\n%s\r\n", strconv.Itoa(len(v)), v)
-			}
+		s = fmt.Sprintf("*%s\r\n", strconv.Itoa(len(res)))
+		for _, v := range res {
+			s += fmt.Sprintf("$%s\r\n%s\r\n", strconv.Itoa(len(v)), v)
 		}
 
-	default:
-		if len(res) == 0 || len(res[0]) == 0 {
-			s = "$-1\r\n"
-		} else {
-			v := res[0]
-			s = fmt.Sprintf("$%s\r\n%s\r\n", strconv.Itoa(len(v)), v)
-		}
+	case NullBulk:
+		s = "$-1\r\n"
+	case Bulk:
+		v := res[0]
+		s = fmt.Sprintf("$%s\r\n%s\r\n", strconv.Itoa(len(v)), v)
 	}
 
 	return []byte(s)

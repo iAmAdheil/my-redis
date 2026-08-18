@@ -81,6 +81,10 @@ func popChan(lch []chan string, target chan string) ([]chan string, bool) {
 		isExists = false
 	)
 
+	if lch == nil {
+		return nil, false
+	}
+
 	for _, ch := range lch {
 		if ch != target {
 			clone = append(clone, ch)
